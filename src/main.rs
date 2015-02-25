@@ -1,4 +1,7 @@
+#![feature(env)]
 #![feature(old_io)]
+#![feature(old_path)]
+
 extern crate mesh;
 extern crate cgmath;
 
@@ -8,16 +11,21 @@ use mesh::StlFile;
 use cgmath::*;
 
 fn main() {
-    let args = std::os::args();
-    let meshname = args.as_slice().get(1).expect(
+
+    let mut args = std::env::args();
+    args.next();  // skip arg0
+    let meshname = args.next().expect(
         "Usage: ./meshman <path/to/mesh>"
-    ).as_slice();
+    );
+
     let meshfile = match File::open(&Path::new(meshname)) {
         Ok(f) => f,
         Err(e) => panic!("file error: {}", e),
     };
+
     let v = Vector3::new(1.0f64, 2.0f64, 3.0f64);
     
-    let mesh = StlFile::read(&mut BufferedReader::new(meshfile));
+    StlFile::read(&mut BufferedReader::new(meshfile));
     println!("Vector3: {}", v.z);
+
 }
