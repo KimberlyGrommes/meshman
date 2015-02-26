@@ -26,3 +26,5 @@ path = "./src/mesh/lib.rs"
 [dependencies]
 
 cgmath = "0.0.6"
+getopts = "*"
+
