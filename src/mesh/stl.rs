@@ -11,9 +11,6 @@ use mesh::Facet;
 use vector::Vector3D;
 use vector::VertexMap;
 
-
-pub struct StlFile;
-
 pub struct StlHeader {
     header: [u8; 80],
 }
@@ -29,7 +26,7 @@ pub struct StlFacet {
 
 impl fmt::Debug for StlFacet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[{:?}]({:?}-{:?}-{:?})[{:X}]",
+        write!(f, "[{:?}] ({:?}-{:?}-{:?}) [{:X}]",
             &self.n, &self.v1, &self.v2, &self.v3, self.abc)
     }
 }
@@ -54,21 +51,22 @@ impl StlFacet {
     }
 }
 
+pub struct StlFile {
+    pub header: [u8; 80],
+    pub facets: Vec<StlFacet>,
+}
+
 impl StlFile {
 
-    pub fn read<R: Reader>(r: &mut R) -> IoResult<Mesh> {
-
-        let mut header = StlHeader { header: [0u8; 80] };
-        try!(r.read_at_least(header.header.len(), &mut header.header));
-
-        let hs = String::from_utf8_lossy(&header.header);
-        if hs.starts_with("solid ") {
-            println!("Is ASCII STL");
-        } else {
-            println!("Is binary STL");
-        }
-
-        StlFile::read_binary(r)
+    pub fn read<R: Reader>(r: &mut R) -> IoResult<StlFile> {
+        let mut file = StlFile {
+            header: [0u8; 80],
+            facets: Vec::new(),
+        };
+        try!(r.read_at_least(file.header.len(), &mut file.header));
+        // TODO: select which form to read: binary or ascii
+        try!(file.read_binary(r));
+        Ok(file)
     }
 
     /*
@@ -89,35 +87,41 @@ impl StlFile {
     }
     */
 
-    fn read_binary(r: &mut Reader) -> IoResult<Mesh> {
-        let facet_count = match r.read_le_u32() {
-            Ok(c) => { println!("Facets: {}", c); c},
-            Err(e) => { println!("Truncated file: {}", e); 0},
-        };
-
-        let mut facets: Vec<StlFacet> = Vec::with_capacity(facet_count as usize);
-        let mut vertices = VertexMap::new();
-        println!("Collections ready");
-
-        for fi in range(0, facet_count) {
-            let f = match StlFacet::read(r) {
-                Ok(x) => x,
-                Err(e) => panic!("file error: {}", e),
-            };
-            let v1i = vertices.add(f.v1);
-            let v2i = vertices.add(f.v2);
-            let v3i = vertices.add(f.v3);
-            println!("  Facet[{}]: {:?} => {}-{}-{}", fi, f, v1i, v2i, v3i);
-            facets.push(f);
+    fn read_binary(&mut self, r: &mut Reader) -> IoResult<&StlFile> {
+        let facet_count = try!(r.read_le_u32());
+        for _ in range(0, facet_count) {
+            let f = try!(StlFacet::read(r));
+            self.facets.push(f);
         }
-        println!("Vertices: {}", vertices.len());
-
-        Ok(new_mesh(&facets, &vertices))
+        Ok(self)
     }
-}
 
-fn new_mesh(fv: &Vec<StlFacet>, vm: &VertexMap) -> Mesh {
-    Mesh::new_from_parts(vm.vector(), indexed_vertices(fv, vm))
+    pub fn kind(&self) -> String {
+        let hs = String::from_utf8_lossy(&self.header);
+        if hs.starts_with("solid ") {
+            "ASCII".to_string()
+        } else {
+            "binary".to_string()
+        }
+    }
+
+    pub fn as_mesh(&self) -> Mesh {
+        let mut vmap = VertexMap::new();
+        for f in self.facets.iter() {
+            vmap.add(f.v1);
+            vmap.add(f.v2);
+            vmap.add(f.v3);
+        }
+        Mesh::new_from_parts(vmap.vector(), indexed_vertices(&self.facets, &vmap))
+    }
+
+    pub fn println_debug(&self) {
+        println!("Is {} STL", self.kind());
+        println!("Facets: {}", self.facets.len());
+        for f in self.facets.iter() {
+            println!("  Facet: {:?}", f);
+        }
+    }
 }
 
 fn indexed_vertices(fv: &Vec<StlFacet>, vm: &VertexMap) -> Vec<Facet> {
