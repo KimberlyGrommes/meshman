@@ -3,12 +3,10 @@
 #![feature(old_path)]
 
 extern crate mesh;
-extern crate cgmath;
 
 use std::old_io::BufferedReader;
 use std::old_io::fs::File;
 use mesh::StlFile;
-use cgmath::*;
 
 fn main() {
 
